@@ -1,0 +1,168 @@
+
+### txssh --- light cssh implementation using zsh and tmux
+
+## Copyright (c) 2013-2014 Zachary Elliott
+##
+## Authors: Zachary Elliott <zach@nyu.edu>
+## URL: https://github.com/zellio/zsh-config/blob/master/functions/txssh
+## Version: 0.1.3
+
+### Commentary:
+
+##
+
+### License:
+
+## All Rights Reserved
+
+## Permission is hereby granted, free of charge, to any person obtaining a
+## copy of this software and associated documentation files (the "Software"),
+## to deal in the Software without restriction, including without limitation
+## the rights to use, copy, modify, merge, publish, distribute, sublicense,
+## and/or sell copies of the Software, and to permit persons to whom the
+## Software is furnished to do so, subject to the following conditions:
+
+## The above copyright notice and this permission notice shall be included in
+## all copies or substantial portions of the Software, and that the name of
+## NYU not be used in advertising or publicity pertaining to distribution of
+## the software without specific written permission.
+
+## THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+## IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+## FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+## AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+## LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+## FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+## DEALINGS IN THE SOFTWARE.
+
+### Code:
+
+local VERSION=0.1.3 basename=$(\basename $0)
+
+usage() {
+    \cat <<EOF
+Usage: ${basename} [OPTION]... [HOST]...
+
+Specific options:
+    -a, --action HOST                Command to run in foreign shell
+    -o, --options OPTIONS            String of options for ssh
+    -p, --port PORT                  Default port number
+    -s, --session NAME               Tmux session name (${basename})
+    -t, --title TITLE                Title header for tmux frames
+    -u, --user USERNAME              Default foreign username
+
+General options:
+        --debug                      Turn on xtrace
+    -h, --help                       Display this help message.
+        --version                    Display the version number
+
+${basename} home page: <https://github.com/zellio/zsh-config>
+Report bugs to: <https://github.com/zellio/zsh-config/issues>
+
+EOF
+}
+
+version() {
+    \cat <<EOF
+${VERSION}
+EOF
+}
+
+error() {
+    \echo -n "$fg_bold[red]>>> ERROR: "
+    \echo -n $1
+    \echo "$reset_color"
+}
+
+# Sanity check for the existance of tmux
+
+if [[ -z "$(command -v tmux)" ]]; then
+    error "program tmux not found. tmux require for ${basename}"
+    return 1
+fi
+
+# Handle no args
+[[ -z "$@" ]] && { usage; return 0; }
+
+
+# Run zparseopts to extrace command flags
+#  - Everything left over is considered to be a hostname
+
+local -A options
+local -a debug help version action user port opts title session new_session
+zparseopts -D -A options \
+    d=debug -debug=debug \
+    h=help -help=help \
+    -version=version \
+    a:=action -action:=action \
+    u:=user -user:=user \
+    p:=port -port:=port \
+    o:=opts -options:=opts \
+    t:=title -title:=title \
+    s:=session -session:=session
+    # n:=new_session -new-session=new_session
+
+
+# Set debug before anything else
+
+[[ -n "$debug" ]] && setopt xtrace
+
+# Run help and version with prejudice
+
+[[ -n "$help" ]] && { usage; return 0; }
+[[ -n "$version" ]] && { version; return 0; }
+
+local session_name=${options[--session]:=${options[-s]:=${basename}}}
+
+local session_exists=$(\tmux ls -F "#{session_name}" 2> /dev/null |
+    \grep -P "^${session_name}$")
+
+# Possibly add a flag to overrule this
+
+if [[ -n "$session_exists" ]]; then
+    error "session \"${session_name}\" already exists";
+    return 1
+fi
+
+typeset -a hosts
+hosts=( "$@" )
+
+if [ -z "$hosts" ]; then
+    error "no hosts provided"
+    return 1
+fi
+
+local ssh_cmd="$(command -v ssh)"
+
+if [ -n "$user" ]; then
+    user=${options[--user]:=$options[-u]}
+    ssh_cmd="$ssh_cmd -l $user"
+fi
+
+if [ -n "$port" ]; then
+    port=${options[--port]:=$options[-p]}
+    ssh_cmd="$ssh_cmd -p $port"
+fi
+
+if [ -n "$action" ]; then
+    action=${options[--action]:=$options[-a]}
+fi
+
+if [ -n "$opts" ]; then
+    opts=${options[--options]:=$options[-o]}
+    ssh_cmd="$ssh_cmd -o \"$opts\""
+fi
+
+local first_run
+for host in $hosts; do
+    if [ -z "$first_run" ]; then
+        \tmux new-session -d -s ${session_name} "$ssh_cmd $host $action"
+        first_run=true
+    else
+        \tmux split-window -t ${session_name} "$ssh_cmd $host $action"
+        \tmux select-layout -t ${session_name} tiled
+    fi
+done
+
+\tmux set-window-option -t ${session_name} synchronize-panes on
+\tmux attach-session -t ${session_name}
