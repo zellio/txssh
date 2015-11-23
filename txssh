@@ -82,11 +82,9 @@ Report bugs to: <https://github.com/zellio/txssh>
 EOF
 }
 
-function version
+function tx__version
 {
-	cat <<EOF
-0.2.0
-EOF
+	echo '0.2.0'
 }
 
 function tx__main
