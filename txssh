@@ -65,7 +65,7 @@ Usage: $tx__basename [OPTION]... [HOST]...
 
 Specific options:
     -a, --action HOST                Command to run in foreign shell
-    -o, --options OPTIONS            String of options for ssh
+    -o, --option OPTION              Option for ssh
     -p, --port PORT                  Default port number
     -s, --session NAME               Tmux session name ($tx__basename)
     -t, --title TITLE                Title header for tmux frames
@@ -90,7 +90,7 @@ function tx__version
 function tx__main
 {
 	ARGS=$(getopt \
-			   --longoptions 'action:,options:,port:,session:,title:,user:,debug,help,version' \
+			   --longoptions 'action:,option:,port:,session:,title:,user:,debug,help,version' \
 			   --name "$tx__basename" \
 			   --options 'a:o:p:s:t:u:h' \
 			   -- "$@")
@@ -115,7 +115,7 @@ function tx__main
 				action="$2"
 				shift 2
 				;;
-			-o|--options)
+			-o|--option)
 				options+=("$2")
 				shift 2
 				;;
